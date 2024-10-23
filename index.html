@@ -20,7 +20,7 @@
     justify-content: flex-start; /* Start content at the top */
     height: 100vh;
     position: relative; /* To allow positioning of the canvas */
-    background-color: var(--tg-theme-bg-color);
+    background-color: var(--tg-theme-secondary-bg-color); /* Secondary background */
     color: var(--tg-theme-text-color);
     overflow: hidden; /* Prevent scrolling on zoom */
   }
@@ -41,7 +41,7 @@
     top: 0;
     left: 0;
     z-index: 1; /* Ensure it's on top */
-    background-color: var(--tg-theme-bg-color);
+    background-color: var(--tg-theme-secondary-bg-color); /* Secondary background */
     color: var(--tg-theme-text-color);
   }
 
@@ -53,7 +53,7 @@
     bottom: 0;
     left: 0;
     text-align: center;
-    background-color: var(--tg-theme-bg-color);
+    background-color: var(--tg-theme-secondary-bg-color); /* Secondary background */
     color: var(--tg-theme-text-color);
   }
 
@@ -86,7 +86,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color: var(--tg-theme-bg-color);
+    background-color: var(--tg-theme-secondary-bg-color); /* Secondary background */
     color: var(--tg-theme-text-color);
   }
 
@@ -175,6 +175,7 @@
   let canvasHeight = pixelSize * 100; // 1000 pixels high
   let canvasX = 0; // X position of the canvas
   let canvasY = 0; // Y position of the canvas
+  let isDragging = false; // Flag for drag/pan
 
   // Load saved data
   const savedPixels = loadFromStorage('pixels');
@@ -201,33 +202,55 @@
     ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
   }
 
-  // Handle canvas click
-  canvas.addEventListener('click', (event) => {
-    // Get the mouse position relative to the canvas's untransformed origin
+  // Handle canvas touch
+  canvas.addEventListener('touchstart', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
+    const touch = event.touches[0];
     const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+    const x = Math.floor((touchX / zoomScale) / pixelSize);
+    const y = Math.floor((touchY / zoomScale) / pixelSize);
 
-    // Calculate pixel coordinates (using untransformed mouse position)
-    const x = Math.floor((mouseX / zoomScale) / pixelSize);
-    const y = Math.floor((mouseY / zoomScale) / pixelSize);
+    // Check for single tap (to paint)
+    if (event.touches.length === 1 && event.target === canvas) {
+      // Color or repaint pixel
+      ctx.fillStyle = colorPicker.value;
+      ctx.fillRect(x * pixelSize * zoomScale, y * pixelSize * zoomScale, pixelSize * zoomScale, pixelSize * zoomScale);
 
-    // Color or repaint pixel
-    ctx.fillStyle = colorPicker.value;
-    ctx.fillRect(x * pixelSize * zoomScale, y * pixelSize * zoomScale, pixelSize * zoomScale, pixelSize * zoomScale);
+      // Check if pixel is already colored
+      const currentColor = pixels[`${x},${y}`];
+      if (currentColor !== colorPicker.value) {
+        // Update balance only if the pixel was not previously painted with the same color
+        pixels[`${x},${y}`] = colorPicker.value;
+        balance += 1;
+        balanceDisplay.textContent = `Balance: ${balance}`;
+      }
 
-    // Check if pixel is already colored
-    const currentColor = pixels[`${x},${y}`];
-    if (currentColor !== colorPicker.value) {
-      // Update balance only if the pixel was not previously painted with the same color
-      pixels[`${x},${y}`] = colorPicker.value;
-      balance += 1;
-      balanceDisplay.textContent = `Balance: ${balance}`;
+      // Save to storage
+      saveToStorage('pixels', JSON.stringify(pixels));
+      saveToStorage('balance', balance);
+    } 
+  });
+
+  // Panning (move the canvas)
+  canvas.addEventListener('touchmove', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
+
+    if (event.touches.length > 1) { // Multi-touch for panning
+      const touch = event.touches[0];
+      canvasX += touch.clientX - dragStartX;
+      canvasY += touch.clientY - dragStartY;
+      canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
+      dragStartX = touch.clientX;
+      dragStartY = touch.clientY;
+      isDragging = true;
     }
+  });
 
-    // Save to storage
-    saveToStorage('pixels', JSON.stringify(pixels));
-    saveToStorage('balance', balance);
+  canvas.addEventListener('touchend', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
+    isDragging = false; // Reset isDragging on touchend
   });
 
   // Zoom in/out logic
@@ -242,57 +265,6 @@
   zoomOutButton.addEventListener('click', () => {
     zoomScale -= zoomStep;
     canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
-  });
-
-  // Panning (move the canvas)
-  let isDragging = false;
-  let dragStartX = 0;
-  let dragStartY = 0;
-
-  canvas.addEventListener('mousedown', (event) => {
-    isDragging = true;
-    dragStartX = event.clientX;
-    dragStartY = event.clientY;
-  });
-
-  document.addEventListener('mousemove', (event) => {
-    if (isDragging) {
-      canvasX += event.clientX - dragStartX;
-      canvasY += event.clientY - dragStartY;
-      canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
-      dragStartX = event.clientX;
-      dragStartY = event.clientY;
-    }
-  });
-
-  document.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-
-  // Touch events
-  canvas.addEventListener('touchstart', (event) => {
-    event.preventDefault(); // Prevent default touch behavior
-
-    const touch = event.touches[0];
-    dragStartX = touch.clientX;
-    dragStartY = touch.clientY;
-    isDragging = true;
-  });
-
-  canvas.addEventListener('touchmove', (event) => {
-    event.preventDefault(); // Prevent default touch behavior
-
-    const touch = event.touches[0];
-    canvasX += touch.clientX - dragStartX;
-    canvasY += touch.clientY - dragStartY;
-    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
-    dragStartX = touch.clientX;
-    dragStartY = touch.clientY;
-  });
-
-  canvas.addEventListener('touchend', (event) => {
-    event.preventDefault(); // Prevent default touch behavior
-    isDragging = false;
   });
 
   // Color Picker Button
