@@ -27,7 +27,6 @@
   #canvas {
     border: 1px solid var(--tg-theme-hint-color);
     position: absolute; /* Allow positioning with translate */
-    background-color: white; /* Set canvas background to white */
   }
 
   #titleContainer {
@@ -118,31 +117,6 @@
 
   h1 {
     color: var(--tg-theme-text-color);
-  }
-
-  /* Mobile Styles */
-  @media (max-width: 768px) {
-    #canvas {
-      width: 100%;
-      height: auto;
-      max-height: 90vh; /* Allow space for other elements */
-    }
-
-    #titleContainer {
-      top: 10px; /* Adjust top position for smaller screens */
-    }
-
-    #colorPickerContainer {
-      bottom: 10px; /* Adjust bottom position for smaller screens */
-    }
-
-    .zoom-buttons {
-      top: 40%; /* Adjust vertical position for smaller screens */
-    }
-
-    #balance {
-      top: 20px; /* Adjust top position for smaller screens */
-    }
   }
 </style>
 </head>
