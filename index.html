@@ -22,11 +22,14 @@
     position: relative; /* To allow positioning of the canvas */
     background-color: var(--tg-theme-bg-color);
     color: var(--tg-theme-text-color);
+    overflow: hidden; /* Prevent scrolling on zoom */
   }
 
   #canvas {
     border: 1px solid var(--tg-theme-hint-color);
     position: absolute; /* Allow positioning with translate */
+    touch-action: none; /* Disable default touch behavior */
+    transform-origin: 0 0; /* Set transform origin to top-left corner */
   }
 
   #titleContainer {
@@ -230,59 +233,15 @@
   // Zoom in/out logic
   const zoomStep = 0.1;
 
-  // Zoom with mouse wheel
-  canvas.addEventListener('wheel', (event) => {
-    if (event.deltaY < 0) {
-      zoomScale += zoomStep;
-    } else {
-      zoomScale -= zoomStep;
-    }
-
-    canvas.width = canvasWidth * zoomScale;
-    canvas.height = canvasHeight * zoomScale;
-    redrawCanvas();
-  });
-
   // Zoom with buttons
   zoomInButton.addEventListener('click', () => {
     zoomScale += zoomStep;
-    canvas.width = canvasWidth * zoomScale;
-    canvas.height = canvasHeight * zoomScale;
-    redrawCanvas();
+    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
   });
 
   zoomOutButton.addEventListener('click', () => {
     zoomScale -= zoomStep;
-    canvas.width = canvasWidth * zoomScale;
-    canvas.height = canvasHeight * zoomScale;
-    redrawCanvas();
-  });
-
-  // Zoom with touch swipe
-  let startX = 0;
-  let startY = 0;
-
-  canvas.addEventListener('touchstart', (event) => {
-    startX = event.touches[0].clientX;
-    startY = event.touches[0].clientY;
-  });
-
-  canvas.addEventListener('touchmove', (event) => {
-    const endX = event.touches[0].clientX;
-    const endY = event.touches[0].clientY;
-    const distanceX = endX - startX;
-    const distanceY = endY - startY;
-
-    if (Math.abs(distanceX) > Math.abs(distanceY)) {
-      if (distanceX > 0) {
-        zoomIn();
-      } else {
-        zoomOut();
-      }
-    }
-
-    startX = endX;
-    startY = endY;
+    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
   });
 
   // Panning (move the canvas)
@@ -300,13 +259,39 @@
     if (isDragging) {
       canvasX += event.clientX - dragStartX;
       canvasY += event.clientY - dragStartY;
-      canvas.style.transform = `translate(${canvasX}px, ${canvasY}px)`;
+      canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
       dragStartX = event.clientX;
       dragStartY = event.clientY;
     }
   });
 
   document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  // Touch events
+  canvas.addEventListener('touchstart', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
+
+    const touch = event.touches[0];
+    dragStartX = touch.clientX;
+    dragStartY = touch.clientY;
+    isDragging = true;
+  });
+
+  canvas.addEventListener('touchmove', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
+
+    const touch = event.touches[0];
+    canvasX += touch.clientX - dragStartX;
+    canvasY += touch.clientY - dragStartY;
+    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
+    dragStartX = touch.clientX;
+    dragStartY = touch.clientY;
+  });
+
+  canvas.addEventListener('touchend', (event) => {
+    event.preventDefault(); // Prevent default touch behavior
     isDragging = false;
   });
 
@@ -329,25 +314,12 @@
   // Helper functions
   function zoomIn() {
     zoomScale += zoomStep;
-    canvas.width = canvasWidth * zoomScale;
-    canvas.height = canvasHeight * zoomScale;
-    redrawCanvas();
+    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
   }
 
   function zoomOut() {
     zoomScale -= zoomStep;
-    canvas.width = canvasWidth * zoomScale;
-    canvas.height = canvasHeight * zoomScale;
-    redrawCanvas();
-  }
-
-  function redrawCanvas() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const pixel in pixels) {
-      const [x, y] = pixel.split(',').map(Number);
-      ctx.fillStyle = pixels[pixel];
-      ctx.fillRect(x * pixelSize * zoomScale, y * pixelSize * zoomScale, pixelSize * zoomScale, pixelSize * zoomScale);
-    }
+    canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
   }
 </script>
 </body>
