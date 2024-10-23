@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Lobster Pixel</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    overflow: hidden;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  #canvasContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; /* Start content at the top */
+    height: 100vh;
+    position: relative; /* To allow positioning of the canvas */
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  #canvas {
+    border: 1px solid var(--tg-theme-hint-color);
+    position: absolute; /* Allow positioning with translate */
+  }
+
+  #titleContainer {
+    width: 100%;
+    padding: 10px;
+    border-bottom: 1px solid var(--tg-theme-hint-color);
+    text-align: center;
+    position: fixed; /* Stay at the top */
+    top: 0;
+    left: 0;
+    z-index: 1; /* Ensure it's on top */
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  #colorPickerContainer {
+    width: 100%;
+    padding: 10px;
+    border-top: 1px solid var(--tg-theme-hint-color);
+    position: fixed; /* Stay at the bottom */
+    bottom: 0;
+    left: 0;
+    text-align: center;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  #colorPickerButton {
+    padding: 8px 16px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--tg-theme-button-color);
+    cursor: pointer;
+    display: inline-block;
+    color: var(--tg-theme-button-text-color);
+  }
+
+  #balance {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 20px;
+    z-index: 1; /* Ensure balance is on top */
+    color: var(--tg-theme-text-color);
+  }
+
+  .zoom-buttons {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 20px;
+    z-index: 1; /* Ensure buttons are on top */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  .zoom-buttons button {
+    margin-bottom: 10px;
+    padding: 10px 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--tg-theme-button-color);
+    cursor: pointer;
+    color: var(--tg-theme-button-text-color);
+  }
+
+  #colorPicker {
+    display: none; /* Hide the default color picker */
+    position: absolute; /* Position it absolutely */
+    z-index: 10; /* Make sure it's on top */
+  }
+
+  #colorPickerButton::after {
+    content: " ";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 5px solid var(--tg-theme-button-color);
+    margin-left: 5px; /* Add some spacing between button and arrow */
+  }
+
+  h1 {
+    color: var(--tg-theme-text-color);
+  }
+</style>
+</head>
+<body>
+<div id="canvasContainer">
+  <div id="titleContainer">
+    <h1>Lobster Pixel</h1>
+  </div>
+  <div id="balance">Balance: 0</div>
+  <canvas id="canvas"></canvas>
+  <div class="zoom-buttons">
+    <button id="zoomIn">+</button>
+    <button id="zoomOut">-</button>
+  </div>
+  <div id="colorPickerContainer">
+    <button id="colorPickerButton">Choose Color</button>
+    <input type="color" id="colorPicker">
+  </div>
+</div>
+
+<script>
+  Telegram.WebApp.isVerticalSwipesEnabled = true;
+
+  // Storage functions
+  const saveToStorage = (key, value) => {
+    try {
+      Telegram.WebApp.cloudStorage.setItem(key, value);
+    } catch (error) {
+      localStorage.setItem(key, value);
+    }
+  };
+
+  const loadFromStorage = (key) => {
+    try {
+      return Telegram.WebApp.cloudStorage.getItem(key);
+    } catch (error) {
+      return localStorage.getItem(key);
+    }
+  };
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const colorPickerButton = document.getElementById('colorPickerButton');
+  const colorPicker = document.getElementById('colorPicker');
+  const balanceDisplay = document.getElementById('balance');
+  const zoomInButton = document.getElementById('zoomIn');
+  const zoomOutButton = document.getElementById('zoomOut');
+  let balance = 0;
+  let pixels = {};
+  let zoomScale = 1;
+  let pixelSize = 10; // Size of each paintable pixel
+  let canvasWidth = pixelSize * 100; // 1000 pixels wide
+  let canvasHeight = pixelSize * 100; // 1000 pixels high
+  let canvasX = 0; // X position of the canvas
+  let canvasY = 0; // Y position of the canvas
+
+  // Load saved data
+  const savedPixels = loadFromStorage('pixels');
+  const savedBalance = loadFromStorage('balance');
+
+  if (savedPixels) {
+    pixels = JSON.parse(savedPixels);
+  }
+
+  if (savedBalance) {
+    balance = parseInt(savedBalance);
+    balanceDisplay.textContent = `Balance: ${balance}`;
+  }
+
+  // Set initial canvas size and position
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  canvas.style.transform = `translate(${canvasX}px, ${canvasY}px)`;
+
+  // Draw pixels from localStorage
+  for (const pixel in pixels) {
+    const [x, y] = pixel.split(',').map(Number);
+    ctx.fillStyle = pixels[pixel];
+    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+  }
+
+  // Handle canvas click
+  canvas.addEventListener('click', (event) => {
+    // Get the mouse position relative to the canvas's untransformed origin
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Calculate pixel coordinates (using untransformed mouse position)
+    const x = Math.floor((mouseX / zoomScale) / pixelSize);
+    const y = Math.floor((mouseY / zoomScale) / pixelSize);
+
+    // Color or repaint pixel
+    ctx.fillStyle = colorPicker.value;
+    ctx.fillRect(x * pixelSize * zoomScale, y * pixelSize * zoomScale, pixelSize * zoomScale, pixelSize * zoomScale);
+
+    // Check if pixel is already colored
+    const currentColor = pixels[`${x},${y}`];
+    if (currentColor !== colorPicker.value) {
+      // Update balance only if the pixel was not previously painted with the same color
+      pixels[`${x},${y}`] = colorPicker.value;
+      balance += 1;
+      balanceDisplay.textContent = `Balance: ${balance}`;
+    }
+
+    // Save to storage
+    saveToStorage('pixels', JSON.stringify(pixels));
+    saveToStorage('balance', balance);
+  });
+
+  // Zoom in/out logic
+  const zoomStep = 0.1;
+
+  // Zoom with mouse wheel
+  canvas.addEventListener('wheel', (event) => {
+    if (event.deltaY < 0) {
+      zoomScale += zoomStep;
+    } else {
+      zoomScale -= zoomStep;
+    }
+
+    canvas.width = canvasWidth * zoomScale;
+    canvas.height = canvasHeight * zoomScale;
+    redrawCanvas();
+  });
+
+  // Zoom with buttons
+  zoomInButton.addEventListener('click', () => {
+    zoomScale += zoomStep;
+    canvas.width = canvasWidth * zoomScale;
+    canvas.height = canvasHeight * zoomScale;
+    redrawCanvas();
+  });
+
+  zoomOutButton.addEventListener('click', () => {
+    zoomScale -= zoomStep;
+    canvas.width = canvasWidth * zoomScale;
+    canvas.height = canvasHeight * zoomScale;
+    redrawCanvas();
+  });
+
+  // Zoom with touch swipe
+  let startX = 0;
+  let startY = 0;
+
+  canvas.addEventListener('touchstart', (event) => {
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+  });
+
+  canvas.addEventListener('touchmove', (event) => {
+    const endX = event.touches[0].clientX;
+    const endY = event.touches[0].clientY;
+    const distanceX = endX - startX;
+    const distanceY = endY - startY;
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX > 0) {
+        zoomIn();
+      } else {
+        zoomOut();
+      }
+    }
+
+    startX = endX;
+    startY = endY;
+  });
+
+  // Panning (move the canvas)
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  canvas.addEventListener('mousedown', (event) => {
+    isDragging = true;
+    dragStartX = event.clientX;
+    dragStartY = event.clientY;
+  });
+
+  document.addEventListener('mousemove', (event) => {
+    if (isDragging) {
+      canvasX += event.clientX - dragStartX;
+      canvasY += event.clientY - dragStartY;
+      canvas.style.transform = `translate(${canvasX}px, ${canvasY}px)`;
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  // Color Picker Button
+  colorPickerButton.addEventListener('click', () => {
+    // Get the button's position and dimensions
+    const buttonRect = colorPickerButton.getBoundingClientRect();
+
+    // Calculate the center position of the button
+    const centerX = buttonRect.left + buttonRect.width / 2;
+    const centerY = buttonRect.top + buttonRect.height / 2;
+
+    // Position the color picker in the center of the button
+    colorPicker.style.left = `${centerX - colorPicker.offsetWidth / 2}px`;
+    colorPicker.style.top = `${centerY - colorPicker.offsetHeight / 2}px`;
+
+    colorPicker.click(); // Trigger the hidden color picker
+  });
+
+  // Helper functions
+  function zoomIn() {
+    zoomScale += zoomStep;
+    canvas.width = canvasWidth * zoomScale;
+    canvas.height = canvasHeight * zoomScale;
+    redrawCanvas();
+  }
+
+  function zoomOut() {
+    zoomScale -= zoomStep;
+    canvas.width = canvasWidth * zoomScale;
+    canvas.height = canvasHeight * zoomScale;
+    redrawCanvas();
+  }
+
+  function redrawCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const pixel in pixels) {
+      const [x, y] = pixel.split(',').map(Number);
+      ctx.fillStyle = pixels[pixel];
+      ctx.fillRect(x * pixelSize * zoomScale, y * pixelSize * zoomScale, pixelSize * zoomScale, pixelSize * zoomScale);
+    }
+  }
+</script>
+</body>
+</html>
