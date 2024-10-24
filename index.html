@@ -176,6 +176,8 @@
   let canvasX = 0; // X position of the canvas
   let canvasY = 0; // Y position of the canvas
   let isDragging = false; // Flag for drag/pan
+  let dragStartX = 0; // Store the initial touch X position for panning
+  let dragStartY = 0; // Store the initial touch Y position for panning
 
   // Load saved data
   const savedPixels = loadFromStorage('pixels');
@@ -209,6 +211,8 @@
     const rect = canvas.getBoundingClientRect();
     const touchX = touch.clientX - rect.left;
     const touchY = touch.clientY - rect.top;
+
+    // Calculate pixel coordinates (using untransformed touch position)
     const x = Math.floor((touchX / zoomScale) / pixelSize);
     const y = Math.floor((touchY / zoomScale) / pixelSize);
 
@@ -230,21 +234,24 @@
       // Save to storage
       saveToStorage('pixels', JSON.stringify(pixels));
       saveToStorage('balance', balance);
-    } 
+    } else if (event.touches.length > 1) { // Multi-touch for panning
+      isDragging = true;
+      dragStartX = touch.clientX;
+      dragStartY = touch.clientY;
+    }
   });
 
   // Panning (move the canvas)
   canvas.addEventListener('touchmove', (event) => {
     event.preventDefault(); // Prevent default touch behavior
 
-    if (event.touches.length > 1) { // Multi-touch for panning
+    if (isDragging) { 
       const touch = event.touches[0];
       canvasX += touch.clientX - dragStartX;
       canvasY += touch.clientY - dragStartY;
       canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoomScale})`;
-      dragStartX = touch.clientX;
-      dragStartY = touch.clientY;
-      isDragging = true;
+      dragStartX = touch.clientX; // Update dragStartX only when panning
+      dragStartY = touch.clientY; // Update dragStartY only when panning
     }
   });
 
